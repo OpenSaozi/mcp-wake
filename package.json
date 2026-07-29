@@ -1,0 +1,30 @@
+{
+  "name": "mcp-wake",
+  "version": "0.2.0",
+  "description": "订阅一个 MCP 资源，把「服务端发生了事」变成「本地进程退出」或「打印一行」——补上很多 AI 代理运行环境缺失的 MCP 通知支持。",
+  "type": "module",
+  "bin": {
+    "mcp-wake": "bin/mcp-wake.mjs"
+  },
+  "license": "MIT",
+  "author": "OpenSaozi",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "agent",
+    "notification",
+    "subscribe",
+    "wake",
+    "cli"
+  ],
+  "files": [
+    "bin",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "private": true
+}
