@@ -2,7 +2,7 @@
 
 > **English** · [中文](README.zh-CN.md)
 
-Subscribe to an MCP resource. Turn *"something happened on the server"* into *"a local process exited"* — or *"a line got printed."*
+**When your MCP client doesn't implement notifications, this fills the gap.** It subscribes through the official protocol on your behalf and turns a server push into something any agent harness understands: a process that exits, or a line that gets printed.
 
 ## Why this exists
 
@@ -40,12 +40,27 @@ Two design notes worth knowing:
 ## Install
 
 ```bash
+npm install -g mcp-wake
+```
+
+Or run it without installing anything:
+
+```bash
+npx mcp-wake --help
+```
+
+<details>
+<summary>Installing from a source checkout</summary>
+
+```bash
 node install.mjs
 ```
 
-Installs a global `mcp-wake`. The installer packs a tarball first and installs *that*, rather than `npm i -g <folder>` — a folder install creates a symlink back into the source tree, so the command breaks the moment you move, delete, or switch branches on the repo. A tarball install is a real copy.
+The installer packs a tarball first and installs *that*, rather than `npm i -g <folder>` — a folder install creates a symlink back into the source tree, so the command breaks the moment you move, delete, or switch branches on the repo. A tarball install is a real copy.
 
-The global location is tied to the Node version you installed under; switch Node versions and it appears to vanish. Just install again.
+</details>
+
+Worth knowing either way: a global install lands under **the Node version you installed with**. Switch Node versions and the command appears to vanish — just install again.
 
 ## Usage
 
