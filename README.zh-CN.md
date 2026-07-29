@@ -101,9 +101,27 @@ mcp-wake \
 | `--print-content` | 命中时把资源正文一并输出 |
 | `--trace` | 往标准错误打印握手／订阅／读取的过程 |
 
-## 前提条件
+## 协议兼容
 
-MCP 服务器必须在握手时声明 `capabilities.resources.subscribe`。没声明的话，`mcp-wake` 会直接说清楚并退出，而不是傻等一个永远不会来的推送。
+`mcp-wake` **两代 MCP 协议都会说**，而且自动挑对的那条。
+
+`2026-07-28` 那版把 MCP 改成了无状态：去掉 `initialize` 握手，协议版本和客户端能力改成每个请求都放在 `_meta` 里，订阅也从 `resources/subscribe` 换成了长连的 `subscriptions/listen`。规范预料到了新老混杂的局面，并且规定了办法：在 stdio 上，先发 `server/discover` 探一下。
+
+启动时就是这么干的：
+
+| 服务器认不认 `server/discover` | 接下来 |
+|---|---|
+| 认 → 是 `2026-07-28` 那代 | 每个请求都带 `_meta`；用 `subscriptions/listen` 订阅，并**核对确认回执里真的有你要的资源** |
+| 不认（方法不存在）→ 是老一代 | 退回 `initialize` 握手 + `resources/subscribe` |
+
+两条路出来的行为一模一样。加 `--trace` 能看到探到的是哪一代。
+
+**两代各自的前提：**
+
+- 老服务器必须声明 `capabilities.resources.subscribe`。没声明就直接说清并退出，不傻等一个永远不会来的推送。
+- `2026-07-28` 服务器必须在 `notifications/subscriptions/acknowledged` 回执里列出你要的资源地址。规范允许服务端只答应一部分，所以这里是**核对**，不是想当然。
+
+两条路都有真实测试覆盖。`test/fake-modern-server.mjs` 是照着规范原文搭的最小 `2026-07-28` 服务器——写这个工具的时候还没有真的新协议服务器，而把没验证过的协议代码直接发出去，比搭个替身更糟。
 
 当前传输是 **stdio**——`mcp-wake` 自己把服务器启动起来。等哪个服务器能走 MCP 的 HTTP 传输，只需要给 `src/mcp-client.mjs` 补一个同样接口的实现；守望逻辑与传输无关。
 

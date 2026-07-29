@@ -101,9 +101,27 @@ Every outcome is an explicit signal. The tool never simply goes quiet and leaves
 | `--print-content` | Include the resource body in the output |
 | `--trace` | Print handshake / subscribe / read progress to stderr |
 
-## Requirements
+## Protocol support
 
-The MCP server must declare `capabilities.resources.subscribe` during initialize. If it does not, `mcp-wake` says so and exits rather than waiting forever for a push that can never arrive.
+`mcp-wake` speaks **both generations of MCP** and picks the right one automatically.
+
+The `2026-07-28` revision made MCP stateless: it removed the `initialize` handshake, moved the protocol version and client capabilities into per-request `_meta`, and replaced `resources/subscribe` with the long-lived `subscriptions/listen` stream. The spec anticipates exactly this mixed world and prescribes the fallback: on stdio, send `server/discover` first.
+
+That is what happens on startup:
+
+| Server answers `server/discover` | Then |
+|---|---|
+| Yes → it is a `2026-07-28`-era server | Every request carries `_meta`; subscribe via `subscriptions/listen`, and verify the acknowledgment actually lists your resource |
+| No (method not found) → it is an older server | Fall back to the `initialize` handshake and `resources/subscribe` |
+
+Either way you get the same behavior out the other end. `--trace` shows which generation was detected.
+
+**Requirements per generation:**
+
+- Older servers must declare `capabilities.resources.subscribe`. If not, `mcp-wake` says so and exits instead of waiting forever for a push that can never arrive.
+- `2026-07-28` servers must include your resource URI in the `notifications/subscriptions/acknowledged` reply. A server is allowed to honor only part of what you asked for, so this is checked rather than assumed.
+
+Both paths are covered by real tests. `test/fake-modern-server.mjs` is a minimal `2026-07-28` server built straight from the spec — no real one existed at the time of writing, and shipping unverified protocol code seemed worse than building a stand-in.
 
 Transport today is **stdio** — `mcp-wake` launches the server itself. When a server is reachable over MCP's HTTP transport, only `src/mcp-client.mjs` needs a sibling implementation; the watch logic is transport-agnostic.
 
