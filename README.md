@@ -2,7 +2,9 @@
 
 > **English** · [中文](README.zh-CN.md)
 
-**When your MCP client doesn't implement notifications, this fills the gap.** It subscribes through the official protocol on your behalf and turns a server push into something any agent harness understands: a process that exits, or a line that gets printed.
+Clients like Claude Code implement MCP only partially. Dispatch a long-running task over MCP — say, putting Codex to work — and you cannot subscribe to the server's events, so you never learn how the task is going.
+
+**`mcp-wake` implements that subscription on the standard MCP protocol and fills the gap on the client's behalf**, so Claude Code — or any other client — can receive server-side notifications. It turns a server push into something every agent harness already understands: a process that exits, or a line that gets printed.
 
 ## Why this exists
 
@@ -115,6 +117,22 @@ Every outcome is an explicit signal. The tool never simply goes quiet and leaves
 | `--cwd <dir>` | Working directory for the spawned server |
 | `--print-content` | Include the resource body in the output |
 | `--trace` | Print handshake / subscribe / read progress to stderr |
+
+## Which servers can be watched
+
+**Not every MCP server.** Resource subscription is an *optional* capability in MCP — a server that only exposes tools is perfectly valid and simply cannot be watched. Two things are required:
+
+1. **The thing you care about is exposed as a resource, and that resource supports subscription.** If the server does not offer this, `mcp-wake` says so and exits immediately rather than waiting forever for a push that can never arrive.
+2. **The server can be launched locally**, because the transport today is stdio. Remote servers reachable over MCP's HTTP transport are not supported yet.
+
+Concretely, the server must implement:
+
+| | Older protocol | `2026-07-28` |
+|---|---|---|
+| Declare | `capabilities.resources.subscribe: true` | `server/discover` |
+| Subscribe | `resources/subscribe` | `subscriptions/listen` |
+| Push | `notifications/resources/updated` | same, preceded by an acknowledgment |
+| Read | `resources/read` | same |
 
 ## Protocol support
 

@@ -1,7 +1,7 @@
 {
   "name": "mcp-wake",
-  "version": "0.3.0",
-  "description": "MCP 客户端没实现通知时替它补上：按官方协议订阅，把服务端推送变成一个会退出的进程或一行输出，让只会等进程结束的 AI 代理也能知道异步任务的状态。",
+  "version": "0.3.1",
+  "description": "替 MCP 客户端补上缺失的通知订阅能力：Claude Code 这类客户端派长任务时订阅不到服务端事件、拿不到进展，本项目按 MCP 标准协议实现订阅，让任意客户端都能收到服务端消息。",
   "type": "module",
   "bin": {
     "mcp-wake": "bin/mcp-wake.mjs"
