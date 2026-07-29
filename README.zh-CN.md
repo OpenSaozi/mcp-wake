@@ -24,7 +24,7 @@ Claude Code 这类客户端对 MCP 的支持并不完整。通过 MCP 派一个�
 ## 它怎么工作
 
 ```
-启动 MCP 服务器（stdio）
+连上 MCP 服务器（一个远程地址，或本地起一个进程走 stdio）
   → 握手 initialize
   → resources/subscribe 订阅
   → 等 notifications/resources/updated 推送
@@ -108,8 +108,10 @@ mcp-wake \
 
 | 选项 | 说明 |
 |---|---|
-| `--server <命令>` | **必填。** 要启动的 MCP 服务器命令，整串（含参数） |
+| `--url <地址>` | **二选一。** 远程 MCP 服务器的 HTTP 端点 |
+| `--server <命令>` | **二选一。** 本地 MCP 服务器命令（走 stdio），整串含参数 |
 | `--resource <uri>` | **必填。** 要订阅的资源地址 |
+| `--header <名: 值>` | 仅 `--url`，可重复。鉴权就靠它 |
 | `--mode once\|stream` | 默认 `once` |
 | `--match <正则>` | 只有正文匹配才算命中 |
 | `--until <正则>` | 仅 `stream`：正文匹配就收尾退出 |
@@ -118,12 +120,32 @@ mcp-wake \
 | `--print-content` | 命中时把资源正文一并输出 |
 | `--trace` | 往标准错误打印握手／订阅／读取的过程 |
 
+## 传输方式：远程和本地都行
+
+一个参数决定走哪种。
+
+**远程，走 MCP 的 HTTP 传输**——本地除了 `mcp-wake` 自己，什么都不用跑：
+
+```bash
+mcp-wake --url https://example.com/mcp \
+         --header "Authorization: Bearer $TOKEN" \
+         --resource "task:///jobs/123" \
+         --match '"status":\s*"(done|failed)"'
+```
+
+`--header` 可以重复给，鉴权就靠它。
+
+**本地，走 stdio**——`mcp-wake` 自己把服务器启动起来：
+
+```bash
+mcp-wake --server "node ./某个-mcp-server.mjs" --resource "..."
+```
+
+`--url` 和 `--server` 给且只给一个。
+
 ## 什么样的服务器能被守望
 
-**不是所有 MCP 服务器都行。** 资源订阅在 MCP 里是**可选能力**——一个只提供工具（tools）的服务器完全合规，但就是没法被守望。两条硬要求：
-
-1. **你关心的东西必须以「资源」暴露出来，而且这个资源支持订阅。** 服务器不提供这个，`mcp-wake` 会当场说清并退出，而不是傻等一个永远不会来的推送。
-2. **服务器得能在本地启动**，因为当前传输是 stdio。走 MCP HTTP 传输的远程服务器**还不支持**。
+**不是所有 MCP 服务器都行。** 资源订阅在 MCP 里是**可选能力**——一个只提供工具（tools）的服务器完全合规，但就是没法被守望。硬要求只有一条：**你关心的东西必须以「资源」暴露出来，而且这个资源支持订阅**。服务器不提供这个，`mcp-wake` 会当场说清并退出，而不是傻等一个永远不会来的推送。
 
 具体到方法，服务器必须实现：
 
@@ -156,7 +178,7 @@ mcp-wake \
 
 两条路都有真实测试覆盖。`test/fake-modern-server.mjs` 是照着规范原文搭的最小 `2026-07-28` 服务器——写这个工具的时候还没有真的新协议服务器，而把没验证过的协议代码直接发出去，比搭个替身更糟。
 
-当前传输是 **stdio**——`mcp-wake` 自己把服务器启动起来。等哪个服务器能走 MCP 的 HTTP 传输，只需要给 `src/mcp-client.mjs` 补一个同样接口的实现；守望逻辑与传输无关。
+两种传输都有真实测试覆盖：`test/fake-modern-server.mjs`（stdio）和 `test/fake-http-server.mjs`（HTTP，两代协议都能扮）。跑 `node test/http-e2e.mjs` 即可。
 
 ## 参与
 

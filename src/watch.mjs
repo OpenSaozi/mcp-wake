@@ -1,3 +1,4 @@
+import { McpHttpClient } from "./http-transport.mjs";
 import { McpError, McpStdioClient } from "./mcp-client.mjs";
 
 /**
@@ -25,12 +26,19 @@ export async function watchResource(config, { onWake, onFinish, onTrace }) {
   const deadlineAt = Date.now() + config.timeoutMinutes * 60_000;
   let serverGone = null;
 
-  const client = new McpStdioClient({
-    command: config.serverCommand,
-    args: config.serverArgs,
-    cwd: config.cwd,
-    onServerGone: (reason) => { serverGone = reason; },
-  });
+  // 两种传输,同一套接口:连一个远程地址,或者在本地起一个进程。
+  const client = config.url
+    ? new McpHttpClient({
+      url: config.url,
+      headers: config.headers,
+      onServerGone: (reason) => { serverGone = reason; },
+    })
+    : new McpStdioClient({
+      command: config.serverCommand,
+      args: config.serverArgs,
+      cwd: config.cwd,
+      onServerGone: (reason) => { serverGone = reason; },
+    });
 
   let timer = null;
   let settle = null;
@@ -85,32 +93,41 @@ export async function watchResource(config, { onWake, onFinish, onTrace }) {
     if (remaining <= 0) return { reason: "timeout" };
     timer = setTimeout(() => finish("timeout"), remaining);
 
-    // 先探一下对面说哪一代协议(server/discover),探不到就退回老握手。
-    const server = await client.connect();
-    onTrace?.({
-      kind: "connected",
-      generation: server.generation,
-      server: server.serverInfo?.name ?? null,
-      versions: server.supportedVersions,
-    });
-    // 老协议靠 initialize 声明的能力位判断;新协议没有这个位,
-    // 能不能订阅要看 subscriptions/listen 的确认回执,所以这里只拦老协议。
-    if (server.generation === "legacy" && !server.capabilities?.resources?.subscribe) {
-      throw new McpError(
-        `这个 MCP 服务器没有声明资源订阅能力(capabilities.resources.subscribe)，`
-          + `无法守望。服务器:${server.serverInfo?.name ?? "未知"}`,
-      );
-    }
-    const subscription = await client.subscribeResource(config.resourceUri);
-    onTrace?.({
-      kind: "subscribed",
-      uri: config.resourceUri,
-      generation: server.generation,
-      subscription_id: subscription.subscriptionId,
-    });
+    // 连接和订阅这段也必须受总时限管着,不能只保护「等事件」那一段。
+    // 否则某一步永远不返回(比如服务器收下 GET 却迟迟不发响应头),超时就救不回来,
+    // 进程会一声不响地挂死 —— 那正是这个工具存在的意义所反对的。
+    // 所以把建立过程也做成一个赛跑对手,谁先到算谁的。
+    const setup = (async () => {
+      // 先探一下对面说哪一代协议(server/discover),探不到就退回老握手。
+      const server = await client.connect();
+      onTrace?.({
+        kind: "connected",
+        generation: server.generation,
+        server: server.serverInfo?.name ?? null,
+        versions: server.supportedVersions,
+      });
+      // 老协议靠 initialize 声明的能力位判断;新协议没有这个位,
+      // 能不能订阅要看 subscriptions/listen 的确认回执,所以这里只拦老协议。
+      if (server.generation === "legacy" && !server.capabilities?.resources?.subscribe) {
+        throw new McpError(
+          `这个 MCP 服务器没有声明资源订阅能力(capabilities.resources.subscribe)，`
+            + `无法守望。服务器:${server.serverInfo?.name ?? "未知"}`,
+        );
+      }
+      const subscription = await client.subscribeResource(config.resourceUri);
+      onTrace?.({
+        kind: "subscribed",
+        uri: config.resourceUri,
+        generation: server.generation,
+        subscription_id: subscription.subscriptionId,
+      });
 
-    // 订阅只对「订阅之后的变化」负责。先主动读一次,免得要等的事情在订阅前就已经发生了。
-    await handlePush();
+      // 订阅只对「订阅之后的变化」负责。先主动读一次,免得要等的事情在订阅前就已经发生了。
+      await handlePush();
+    })();
+    setup.catch((error) => finish("error", {
+      error: error instanceof Error ? error.message : String(error),
+    }));
 
     const result = await finished;
     if (result.reason === "error") return result;

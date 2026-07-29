@@ -1,6 +1,6 @@
 {
   "name": "mcp-wake",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "替 MCP 客户端补上缺失的通知订阅能力：Claude Code 这类客户端派长任务时订阅不到服务端事件、拿不到进展，本项目按 MCP 标准协议实现订阅，让任意客户端都能收到服务端消息。",
   "type": "module",
   "bin": {

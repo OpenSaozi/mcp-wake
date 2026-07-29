@@ -11,34 +11,45 @@ const DEFAULT_TIMEOUT_MINUTES = 30;
 
 function usage() {
   return [
-    "用法:mcp-wake --server <命令> --resource <资源地址> [选项]",
+    "用法:mcp-wake (--url <地址> | --server <命令>) --resource <资源地址> [选项]",
+    "",
+    "去哪儿连(两者取其一,必填其一):",
+    "  --url <地址>             远程 MCP 服务器的 HTTP 端点",
+    "  --server <命令>          本地 MCP 服务器命令(整串,含参数),走 stdio",
     "",
     "必填:",
-    "  --server <命令>          要启动的 MCP 服务器命令(整串,含参数)",
     "  --resource <uri>         要订阅的资源地址",
     "",
     "可选:",
+    "  --header <名: 值>        仅 --url:附加请求头,可重复(鉴权用)",
     "  --mode once|stream       once=命中就退出(默认);stream=每次命中打印一行",
     "  --match <正则>           只有资源正文匹配它才算命中;省略表示任何变化都算",
     "  --until <正则>           仅 stream:正文匹配它就收尾退出",
     "  --timeout-minutes <分钟> 总时长,默认 30,可传小数",
-    "  --cwd <目录>             MCP 服务器的工作目录",
+    "  --cwd <目录>             仅 --server:被启动服务器的工作目录",
     "  --print-content          命中时把资源正文一并输出",
     "  --trace                  往标准错误打印握手/订阅/读取的过程",
     "",
     "退出码:0=命中收尾 3=超时 1=出错(服务器起不来、订阅被拒、连接断了)",
     "",
-    "例:守望一个 Codex 对话,轮次跑完就叫醒我",
+    "例一(远程):守望远端 MCP 服务器上的一个资源",
+    "  mcp-wake --url https://example.com/mcp \\",
+    "    --header 'Authorization: Bearer 你的令牌' \\",
+    "    --resource 'task:///jobs/123' \\",
+    "    --match '\"status\":\\s*\"(done|failed)\"'",
+    "",
+    "例二(本地):守望一个 Codex 对话,轮次跑完就叫醒我",
     "  mcp-wake \\",
     "    --server 'node /路径/codex-conversation-bridge-mcp.mjs' \\",
     "    --resource 'codex-conversation:///v1/conversations/cv_xxx/events?since=0' \\",
-    "    --match '\"type\":\"turn\\.(completed|failed|cancelled)\"'",
+    "    --match '\"type\":\\s*\"turn\\.(completed|failed|cancelled)\"'",
   ].join("\n");
 }
 
 function parseArgv(argv) {
   if (argv.length === 0 || argv[0] === "--help" || argv[0] === "-h") return { help: true };
   const values = new Map();
+  const repeated = [];
   const flags = new Set();
   const booleans = new Set(["print-content", "trace"]);
   for (let index = 0; index < argv.length; index += 1) {
@@ -50,20 +61,42 @@ function parseArgv(argv) {
     if (booleans.has(name)) { flags.add(name); continue; }
     const value = separator >= 0 ? raw.slice(separator + 1) : argv[++index];
     if (value === undefined || value.startsWith("--")) throw new Error(`--${name} 缺少值`);
+    // --header 是唯一允许重复的:一次请求常常要带好几个头。
+    if (name === "header") { repeated.push(value); continue; }
     if (values.has(name)) throw new Error(`--${name} 不能重复`);
     values.set(name, value);
   }
   const known = new Set([
-    "server", "resource", "mode", "match", "until", "timeout-minutes", "cwd",
+    "url", "server", "resource", "mode", "match", "until", "timeout-minutes", "cwd",
   ]);
   for (const name of values.keys()) {
     if (!known.has(name)) throw new Error(`未知参数:--${name}`);
   }
 
+  const url = values.get("url");
   const server = values.get("server");
-  if (!server) throw new Error("--server 必填:要启动哪个 MCP 服务器");
+  if (url && server) throw new Error("--url 和 --server 只能给一个:要么连远程，要么起本地进程");
+  if (!url && !server) throw new Error("要么给 --url(远程地址)，要么给 --server(本地命令)");
+  if (url) {
+    let parsed;
+    try {
+      parsed = new URL(url);
+    } catch {
+      throw new Error(`--url 不是合法地址:${url}`);
+    }
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      throw new Error(`--url 只支持 http/https，收到:${parsed.protocol}`);
+    }
+  }
+  if (!url && repeated.length) throw new Error("--header 只在 --url 模式下有意义");
+  const headers = {};
+  for (const item of repeated) {
+    const at = item.indexOf(":");
+    if (at <= 0) throw new Error(`--header 格式应为「名: 值」，收到:${item}`);
+    headers[item.slice(0, at).trim()] = item.slice(at + 1).trim();
+  }
   // 整串命令按空白切开。参数里带空格的场景很少,真遇到再加专门的参数。
-  const parts = server.trim().split(/\s+/);
+  const parts = server ? server.trim().split(/\s+/) : [];
   const resourceUri = values.get("resource");
   if (!resourceUri) throw new Error("--resource 必填:要订阅哪个资源");
   const mode = values.get("mode") ?? "once";
@@ -86,6 +119,8 @@ function parseArgv(argv) {
 
   return {
     help: false,
+    url,
+    headers,
     serverCommand: parts[0],
     serverArgs: parts.slice(1),
     resourceUri,

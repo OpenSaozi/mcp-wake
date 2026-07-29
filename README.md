@@ -24,7 +24,7 @@ The practical consequence: every time an agent needs to learn about something as
 ## How it works
 
 ```
-spawn the MCP server (stdio)
+connect to the MCP server (a remote URL, or a local process over stdio)
   → initialize
   → resources/subscribe
   → wait for notifications/resources/updated
@@ -108,8 +108,10 @@ Every outcome is an explicit signal. The tool never simply goes quiet and leaves
 
 | Option | Description |
 |---|---|
-| `--server <command>` | **Required.** The MCP server command to launch, as one string including arguments |
+| `--url <endpoint>` | **One of these two.** HTTP endpoint of a remote MCP server |
+| `--server <command>` | **One of these two.** Local MCP server command to launch (stdio), as one string including arguments |
 | `--resource <uri>` | **Required.** The resource URI to subscribe to |
+| `--header <name: value>` | `--url` only; repeatable. This is how you pass authentication |
 | `--mode once\|stream` | Default `once` |
 | `--match <regex>` | Only a matching resource body counts as a hit |
 | `--until <regex>` | `stream` only: stop and exit when the body matches |
@@ -118,12 +120,32 @@ Every outcome is an explicit signal. The tool never simply goes quiet and leaves
 | `--print-content` | Include the resource body in the output |
 | `--trace` | Print handshake / subscribe / read progress to stderr |
 
+## Transports: remote and local
+
+Both are supported, and you pick with a single flag.
+
+**Remote, over MCP's HTTP transport** — nothing runs locally except `mcp-wake` itself:
+
+```bash
+mcp-wake --url https://example.com/mcp \
+         --header "Authorization: Bearer $TOKEN" \
+         --resource "task:///jobs/123" \
+         --match '"status":\s*"(done|failed)"'
+```
+
+`--header` may be repeated, which is how you pass authentication.
+
+**Local, over stdio** — `mcp-wake` launches the server itself:
+
+```bash
+mcp-wake --server "node ./some-mcp-server.mjs" --resource "..." 
+```
+
+Give exactly one of `--url` or `--server`.
+
 ## Which servers can be watched
 
-**Not every MCP server.** Resource subscription is an *optional* capability in MCP — a server that only exposes tools is perfectly valid and simply cannot be watched. Two things are required:
-
-1. **The thing you care about is exposed as a resource, and that resource supports subscription.** If the server does not offer this, `mcp-wake` says so and exits immediately rather than waiting forever for a push that can never arrive.
-2. **The server can be launched locally**, because the transport today is stdio. Remote servers reachable over MCP's HTTP transport are not supported yet.
+**Not every MCP server.** Resource subscription is an *optional* capability in MCP — a server that only exposes tools is perfectly valid and simply cannot be watched. The requirement is that **the thing you care about is exposed as a resource, and that resource supports subscription**. If the server does not offer this, `mcp-wake` says so and exits immediately rather than waiting forever for a push that can never arrive.
 
 Concretely, the server must implement:
 
@@ -156,7 +178,7 @@ Either way you get the same behavior out the other end. `--trace` shows which ge
 
 Both paths are covered by real tests. `test/fake-modern-server.mjs` is a minimal `2026-07-28` server built straight from the spec — no real one existed at the time of writing, and shipping unverified protocol code seemed worse than building a stand-in.
 
-Transport today is **stdio** — `mcp-wake` launches the server itself. When a server is reachable over MCP's HTTP transport, only `src/mcp-client.mjs` needs a sibling implementation; the watch logic is transport-agnostic.
+Both transports are covered by real tests: `test/fake-modern-server.mjs` (stdio) and `test/fake-http-server.mjs` (HTTP, able to play either generation). Run them with `node test/http-e2e.mjs`.
 
 ## Contributing
 
