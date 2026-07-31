@@ -72,13 +72,13 @@ mcp-wake --server "<command to launch an MCP server>" \
          [--match "<regex>"] [--mode once|stream]
 ```
 
-Watch a Codex conversation and wake when the turn ends:
+Launch a local MCP server over stdio and wake when one of its long-running jobs finishes:
 
 ```bash
 mcp-wake \
-  --server "node /path/to/codex-conversation-bridge-mcp.mjs" \
-  --resource "codex-conversation:///v1/conversations/cv_xxx/events?since=0" \
-  --match '"type":\s*"turn\.(completed|failed|cancelled)"' \
+  --server "node ./my-mcp-server.mjs" \
+  --resource "jobs:///builds/42" \
+  --match '"state":\s*"(succeeded|failed)"' \
   --timeout-minutes 150
 ```
 

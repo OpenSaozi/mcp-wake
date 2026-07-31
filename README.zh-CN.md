@@ -72,13 +72,13 @@ mcp-wake --server "<启动 MCP 服务器的命令>" \
          [--match "<正则>"] [--mode once|stream]
 ```
 
-守望一个 Codex 对话，轮次跑完就叫醒我：
+起一个本地 MCP 服务器（走 stdio），守望其中一项长任务，跑完就叫醒我：
 
 ```bash
 mcp-wake \
-  --server "node /路径/codex-conversation-bridge-mcp.mjs" \
-  --resource "codex-conversation:///v1/conversations/cv_xxx/events?since=0" \
-  --match '"type":\s*"turn\.(completed|failed|cancelled)"' \
+  --server "node ./my-mcp-server.mjs" \
+  --resource "jobs:///builds/42" \
+  --match '"state":\s*"(succeeded|failed)"' \
   --timeout-minutes 150
 ```
 

@@ -38,11 +38,11 @@ function usage() {
     "    --resource 'task:///jobs/123' \\",
     "    --match '\"status\":\\s*\"(done|failed)\"'",
     "",
-    "例二(本地):守望一个 Codex 对话,轮次跑完就叫醒我",
+    "例二(本地):起一个本地 MCP 服务器进程,守望其中一项长任务",
     "  mcp-wake \\",
-    "    --server 'node /路径/codex-conversation-bridge-mcp.mjs' \\",
-    "    --resource 'codex-conversation:///v1/conversations/cv_xxx/events?since=0' \\",
-    "    --match '\"type\":\\s*\"turn\\.(completed|failed|cancelled)\"'",
+    "    --server 'node ./my-mcp-server.mjs' \\",
+    "    --resource 'jobs:///builds/42' \\",
+    "    --match '\"state\":\\s*\"(succeeded|failed)\"'",
   ].join("\n");
 }
 
